@@ -5,12 +5,12 @@ pipe: $(OBJ)
 $(OBJ): functions.h
 
 
-OBJ2= demon.o
-all:demon
-demon: $(OBJ2)
-	gcc $(OBJ2) -o demon
+OBJ2= minicron.o
+all:minicron
+minicron: $(OBJ2)
+	gcc $(OBJ2) -o minicron
 .PHONY: clean cleanall
 clean: 
 	rm -f *.o 
 cleanall:
-	rm -f *.o out* demon pipe
+	rm -f *.o out* minicron pipe
