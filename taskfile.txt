@@ -1,0 +1,5 @@
+23:44:cat taskfile.txt:2
+03:12:ls -l | wc:2
+12:32:pwd:0
+18:42:cat outfile.txt | abc123:2
+18:43:echo 123:2
