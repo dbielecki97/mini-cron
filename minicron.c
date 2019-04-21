@@ -22,7 +22,7 @@ struct tm *getTime() {
 }
 //----------------------------------------------------------------zmienna
 // globalna xd
-int row = 0, in, out, needsSorting = 1;
+int row = 0, in, out, needsSorting = 1, needsSending = 0;
 int getTaskSeconds(char *buffer) {
     int hour = (buffer[0] % 48) * 10 + (buffer[1] % 48);
     int minute = (buffer[3] % 48) * 10 + (buffer[4] % 48);
@@ -163,8 +163,6 @@ void sortTaskFile(char *taskfile) {
 
 int sleepIfNeeded(char *buffer) {
     int timeLeft = 0;
-    if (buffer == NULL)
-        return;
     int task_seconds = getTaskSeconds(buffer);
     struct tm *ptm = getTime();
     int act_seconds =
@@ -173,10 +171,10 @@ int sleepIfNeeded(char *buffer) {
         // printf("godz:%d:%d:%d, odliczanie->%d\n",(ptm->tm_hour+CET)%24,
         // ptm->tm_min, ptm->tm_sec, (task_seconds - act_seconds));
         if (task_seconds - act_seconds < 0) {
-            // sleep(24*60*60 - act_seconds + task_seconds);
+            // timeLeft = slee(24*60*60 - act_seconds + task_seconds);
         }
-        // sleep(task_seconds - act_seconds);
-        timeLeft = sleep(10);
+        //else timeLeft = sleep(task_seconds - act_seconds);
+        timeLeft = sleep(20);
     }
     return timeLeft;
 }
@@ -184,8 +182,21 @@ void handler(int sig) {
     if (sig == SIGUSR1) {
         needsSorting = 1;
     } else if (sig == SIGUSR2) {
-        // TODO
+        needsSending = 1;
     }
+}
+void sendRemainingTasks(char *taskfile){
+    setlogmask(LOG_UPTO(LOG_INFO));
+    openlog("REMAINING TASKS", LOG_CONS | LOG_PID | LOG_NDELAY, LOG_LOCAL1);
+    int row_copy = row;
+    row-=1;
+    char *buffer = getNextTask(taskfile);
+    while(buffer != NULL){
+        syslog(LOG_INFO, "%s", buffer);
+        buffer = getNextTask(taskfile);
+    }
+    row = row_copy-1;
+    closelog();
 }
 int main(int argc, char *argv[]) {
     /* Our process ID and Session ID */
@@ -194,6 +205,7 @@ int main(int argc, char *argv[]) {
     char *outfile = argv[2];
 
     signal(SIGUSR1, handler);
+    signal(SIGUSR2, handler);
     //-------------inicjalizacja DEMONA-------------------------------
 
     /* Fork off the parent process */
@@ -248,6 +260,10 @@ int main(int argc, char *argv[]) {
                 sortTaskFile(taskfile);
                 row = 0;
                 needsSorting = 0;
+            }
+            if (needsSending){
+                sendRemainingTasks(taskfile);
+                needsSending = 0;
             }
             buffer = getNextTask(taskfile);
             if (buffer == NULL) {
