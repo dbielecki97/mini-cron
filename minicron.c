@@ -22,9 +22,7 @@ struct tm *getTime() {
 }
 //----------------------------------------------------------------zmienna
 // globalna xd
-int row = 0;
-volatile sig_atomic_t t = 0;
-int in, out;
+int row = 0, in, out, needsSorting = 1;
 int getTaskSeconds(char *buffer) {
     int hour = (buffer[0] % 48) * 10 + (buffer[1] % 48);
     int minute = (buffer[3] % 48) * 10 + (buffer[4] % 48);
@@ -131,7 +129,8 @@ void sortTaskFile(char *taskfile) {
     FILE *extra_file = fopen("extra.txt", "w");
 
     struct tm *ptm = getTime();
-    int act_seconds = ptm->tm_sec + ptm->tm_min * 60 + ((ptm->tm_hour + CET) % 24) * 60 * 60;
+    int act_seconds =
+        ptm->tm_sec + ptm->tm_min * 60 + ((ptm->tm_hour + CET) % 24) * 60 * 60;
     char *buffer = (char *)calloc(sizeof(char), 1024);
     size_t buf_size = 1024;
     while (!feof(main_file) && !ferror(main_file) &&
@@ -159,7 +158,7 @@ void sortTaskFile(char *taskfile) {
     rename("extra.txt", taskfile);
     fclose(extra_file);
     close(STDIN_FILENO);
-    //close(STDOUT_FILENO);
+    close(STDOUT_FILENO);
 }
 
 void sleepIfNeeded(char *buffer) {
@@ -179,30 +178,19 @@ void sleepIfNeeded(char *buffer) {
         sleep(10);
     }
 }
-void handler(int sig){
-    char s0[] = "SIGINT\n";
-    char s1[] = "SIGUSR1\n";
-    char s2[] = "SIGUSR2\n";
-    if(sig == SIGINT){
-        write(STDOUT_FILENO, s0, sizeof(s0));
-        exit(sig);
-    } else if (sig == SIGUSR1) {
-        write(STDOUT_FILENO, s1, sizeof(s1));
-        sortTaskFile("taskfile.txt");
-        t = 1;
-        row = 0;
-        printf("posortowano\n");
+void handler(int sig) {
+    if (sig == SIGUSR1) {
+        needsSorting = 1;
     } else if (sig == SIGUSR2) {
-        write(STDOUT_FILENO, s2, sizeof(s2));
+        // TODO
     }
-    signal(sig, handler);
 }
 int main(int argc, char *argv[]) {
     /* Our process ID and Session ID */
     pid_t pid, sid, status;
     char *taskfile = argv[1];
     char *outfile = argv[2];
- 
+
     signal(SIGUSR1, handler);
     //-------------inicjalizacja DEMONA-------------------------------
 
@@ -235,14 +223,12 @@ int main(int argc, char *argv[]) {
     in = dup(0);
     out = dup(1);
     close(STDIN_FILENO);
-    //close(STDOUT_FILENO);
-    //close(STDERR_FILENO);
+    close(STDOUT_FILENO);
+    close(STDERR_FILENO);
     /*-------------------koniec inicjalizacji
      * !!----------------------------------*/
 
     /* Daemon-specific initialization goes here */
-
-    sortTaskFile(taskfile);
 
     char *buffer = NULL;
     /* The Big Loop */
@@ -256,6 +242,11 @@ int main(int argc, char *argv[]) {
         }
         waitpid(pid, NULL, 0);
         while (1) {
+            if (needsSorting) {
+                sortTaskFile(taskfile);
+                row = 0;
+                needsSorting = 0;
+            }
             buffer = getNextTask(taskfile);
             if (buffer == NULL) {
                 printf("Koniec listy zadan\n");
