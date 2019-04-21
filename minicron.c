@@ -23,7 +23,8 @@ struct tm *getTime() {
 //----------------------------------------------------------------zmienna
 // globalna xd
 int row = 0;
-int in = 0, out;
+volatile sig_atomic_t t = 0;
+int in, out;
 int getTaskSeconds(char *buffer) {
     int hour = (buffer[0] % 48) * 10 + (buffer[1] % 48);
     int minute = (buffer[3] % 48) * 10 + (buffer[4] % 48);
@@ -131,7 +132,7 @@ void sortTaskFile(char *taskfile) {
 
     struct tm *ptm = getTime();
     int act_seconds = ptm->tm_sec + ptm->tm_min * 60 + ((ptm->tm_hour + CET) % 24) * 60 * 60;
-    char *buffer = (char *)calloc(sizeof(char), 10024);
+    char *buffer = (char *)calloc(sizeof(char), 1024);
     size_t buf_size = 1024;
     while (!feof(main_file) && !ferror(main_file) &&
            getline(&buffer, &buf_size, main_file) != EOF) {
@@ -158,7 +159,7 @@ void sortTaskFile(char *taskfile) {
     rename("extra.txt", taskfile);
     fclose(extra_file);
     close(STDIN_FILENO);
-    close(STDOUT_FILENO);
+    //close(STDOUT_FILENO);
 }
 
 void sleepIfNeeded(char *buffer) {
@@ -178,13 +179,31 @@ void sleepIfNeeded(char *buffer) {
         sleep(10);
     }
 }
-
+void handler(int sig){
+    char s0[] = "SIGINT\n";
+    char s1[] = "SIGUSR1\n";
+    char s2[] = "SIGUSR2\n";
+    if(sig == SIGINT){
+        write(STDOUT_FILENO, s0, sizeof(s0));
+        exit(sig);
+    } else if (sig == SIGUSR1) {
+        write(STDOUT_FILENO, s1, sizeof(s1));
+        sortTaskFile("taskfile.txt");
+        t = 1;
+        row = 0;
+        printf("posortowano\n");
+    } else if (sig == SIGUSR2) {
+        write(STDOUT_FILENO, s2, sizeof(s2));
+    }
+    signal(sig, handler);
+}
 int main(int argc, char *argv[]) {
     /* Our process ID and Session ID */
     pid_t pid, sid, status;
     char *taskfile = argv[1];
     char *outfile = argv[2];
-
+ 
+    signal(SIGUSR1, handler);
     //-------------inicjalizacja DEMONA-------------------------------
 
     /* Fork off the parent process */
@@ -216,7 +235,7 @@ int main(int argc, char *argv[]) {
     in = dup(0);
     out = dup(1);
     close(STDIN_FILENO);
-    close(STDOUT_FILENO);
+    //close(STDOUT_FILENO);
     //close(STDERR_FILENO);
     /*-------------------koniec inicjalizacji
      * !!----------------------------------*/
@@ -242,7 +261,7 @@ int main(int argc, char *argv[]) {
                 printf("Koniec listy zadan\n");
                 break;
             }
-            // sleepIfNeeded(buffer);
+            sleepIfNeeded(buffer);
             pid = fork();
             if (pid == (pid_t)0) {
                 printf("%s", buffer);
