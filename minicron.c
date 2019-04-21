@@ -81,7 +81,7 @@ stream is the input file handle. So you could use getline() to read a line of te
     return NULL;
 }
 
-void writeFromFile (FILE* stream, char* filename) {
+void writeFromFile (FILE** stream, char* filename) {
     FILE *file = fopen(filename, "r");
     if(file == NULL){
         perror("Blad otwarcia pliku");
@@ -91,8 +91,8 @@ void writeFromFile (FILE* stream, char* filename) {
     char c = getc(file); 
     while (c != EOF){
     //  printf("%c", c);
-        fprintf(stream, "%c", c);
-        fflush(stream);
+        fprintf(*stream, "%c", c);
+        fflush(*stream);
         c = getc(file);
     }
     fclose(file);
@@ -103,6 +103,7 @@ void sortTaskFile(char* taskfile){
     int fds[2]; 
     pipe(fds);
     pid = fork();
+    printf("ja");
     if (pid == (pid_t) 0) { //child
         dup2(fds[0], STDIN_FILENO);
         int fd = open(taskfile, O_WRONLY);
@@ -115,13 +116,15 @@ void sortTaskFile(char* taskfile){
         FILE* stream;
         close(fds[0]);
         stream = fdopen(fds[1], "w");
-        writeFromFile(stream, taskfile);
+        writeFromFile(&stream, taskfile);
         close(fds[1]);
         waitpid(pid, &status, 0);
         fclose(stream);
     }
     FILE *main_file = fopen(taskfile, "r");
     FILE *extra_file = fopen("extra.txt", "w");
+
+    printf("ja");
     struct tm *ptm = getTime();
     int act_seconds = ptm->tm_sec + ptm->tm_min*60 + ((ptm->tm_hour+CET)%24)*60*60;
     char* buffer = (char*)calloc(sizeof(char),1024);
@@ -173,51 +176,35 @@ void sleepIfNeeded(char* buffer){
     }
 }
 
-void handler(int sig){
-    char s0[] = "SIGINT\n";
-    char s1[] = "SIGUSR1\n";
-    char s2[] = "SIGUSR2\n";
-    if(sig == SIGINT){
-        write(STDOUT_FILENO, s0, sizeof(s0));
-        exit(sig);
-    } else if (sig == SIGUSR1) {
-        write(STDOUT_FILENO, s1, sizeof(s1));
-        //t = 0;
-        //printf("posortowano\n");
-        //sortTaskFile("taskfile.txt");//zmienna globalna
-       /*         sleep(2);
-        signal(sig, SIG_IGN);
-        row = 0;
-        signal(sig, SIG_DFL);*/
-    } else if (sig == SIGUSR2) {
-        write(STDOUT_FILENO, s2, sizeof(s2));
-    }
-    t = 1;
-    signal(sig, handler);//restartuje handler/sygnal
+void segfunc(int signal, siginfo_t *si, void *arg){
+    printf("Caught segfault addres %p %d\n", si->si_addr, si->si_pid);
+    exit(0);
 }
-
 int main(int argc, char* argv[]) {   
     /* Our process ID and Session ID */
     pid_t pid, sid, status;
     char* taskfile = argv[1];
     char* outfile = argv[2];
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(struct sigaction));
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_SIGINFO;
+    sa.sa_sigaction = segfunc;
+    sigaction(SIGSEGV, &sa, NULL);
    // filename = taskfile;
-    signal(SIGINT, handler); 
-    signal(SIGUSR1, handler);
-    signal(SIGUSR2, handler); 
 //sortowanie pliku taskfile.txt
-    sortTaskFile(taskfile);
-
 //-------------inicjalizacja DEMONA-------------------------------
 
     /* Fork off the parent process */
     pid = fork();
     if(pid < 0) {
+        printf("fail\n");
         exit(EXIT_FAILURE);
     }
     /* If we got a good PID, then
        we can exit the parent process. */
     if(pid > 0) {
+        sortTaskFile(taskfile);
         exit(EXIT_SUCCESS);
     }
     /* Change the file mode mask */
@@ -227,16 +214,17 @@ int main(int argc, char* argv[]) {
     /* Create a new SID for the child process */
     sid = setsid();
     if(sid < 0) {
+        printf("fail\n");
         /* Log the failure */
         exit(EXIT_FAILURE);
     }        
     /* Change the current working directory */
 /*if ((chdir("/")) < 0) {
-    Log the failure 
+    //Log the failure 
     exit(EXIT_FAILURE);
-}    */
+}    
     /* Close out the standard file descriptors */   
-    close(STDIN_FILENO);
+    //close(STDIN_FILENO);
     //close(STDOUT_FILENO);
     close(STDERR_FILENO);
 /*-------------------koniec inicjalizacji !!----------------------------------*/
@@ -251,6 +239,7 @@ int main(int argc, char* argv[]) {
     pid = fork();
     if (pid == -1){
         perror("fork");
+        printf("x");
         assert(false);
     }
     else {
@@ -258,7 +247,10 @@ int main(int argc, char* argv[]) {
             exit(EXIT_SUCCESS);
         }
         waitpid(pid, NULL, 0);
-        while (1) {        
+        while (1) {           
+            printf("AAAAAAA\n");
+            sortTaskFile(taskfile);
+            printf("BBBBBBB\n");
             buffer = getNextTask(taskfile);
             if(buffer == NULL){
                 printf("Koniec listy zadan\n");
