@@ -23,7 +23,7 @@ struct tm *getTime() {
 //----------------------------------------------------------------zmienna
 // globalna xd
 int row = 0;
-int in, out;
+int in = 0, out;
 int getTaskSeconds(char *buffer) {
     int hour = (buffer[0] % 48) * 10 + (buffer[1] % 48);
     int minute = (buffer[3] % 48) * 10 + (buffer[4] % 48);
@@ -130,10 +130,9 @@ void sortTaskFile(char *taskfile) {
     FILE *extra_file = fopen("extra.txt", "w");
 
     struct tm *ptm = getTime();
-    int act_seconds =
-        ptm->tm_sec + ptm->tm_min * 60 + ((ptm->tm_hour + CET) % 24) * 60 * 60;
-    char *buffer = (char *)calloc(sizeof(char), 1024);
-    size_t buf_size = 128;
+    int act_seconds = ptm->tm_sec + ptm->tm_min * 60 + ((ptm->tm_hour + CET) % 24) * 60 * 60;
+    char *buffer = (char *)calloc(sizeof(char), 10024);
+    size_t buf_size = 1024;
     while (!feof(main_file) && !ferror(main_file) &&
            getline(&buffer, &buf_size, main_file) != EOF) {
         int task_seconds = getTaskSeconds(buffer);
@@ -158,6 +157,8 @@ void sortTaskFile(char *taskfile) {
     remove(taskfile);
     rename("extra.txt", taskfile);
     fclose(extra_file);
+    close(STDIN_FILENO);
+    close(STDOUT_FILENO);
 }
 
 void sleepIfNeeded(char *buffer) {
@@ -184,7 +185,6 @@ int main(int argc, char *argv[]) {
     char *taskfile = argv[1];
     char *outfile = argv[2];
 
-    sortTaskFile(taskfile);
     //-------------inicjalizacja DEMONA-------------------------------
 
     /* Fork off the parent process */
@@ -217,15 +217,13 @@ int main(int argc, char *argv[]) {
     out = dup(1);
     close(STDIN_FILENO);
     close(STDOUT_FILENO);
-    close(STDERR_FILENO);
+    //close(STDERR_FILENO);
     /*-------------------koniec inicjalizacji
      * !!----------------------------------*/
 
     /* Daemon-specific initialization goes here */
 
-    printf("AAAAAAA\n");
     sortTaskFile(taskfile);
-    printf("BBBBBBB\n");
 
     char *buffer = NULL;
     /* The Big Loop */
