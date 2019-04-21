@@ -161,7 +161,8 @@ void sortTaskFile(char *taskfile) {
     close(STDOUT_FILENO);
 }
 
-void sleepIfNeeded(char *buffer) {
+int sleepIfNeeded(char *buffer) {
+    int timeLeft = 0;
     if (buffer == NULL)
         return;
     int task_seconds = getTaskSeconds(buffer);
@@ -175,8 +176,9 @@ void sleepIfNeeded(char *buffer) {
             // sleep(24*60*60 - act_seconds + task_seconds);
         }
         // sleep(task_seconds - act_seconds);
-        sleep(10);
+        timeLeft = sleep(10);
     }
+    return timeLeft;
 }
 void handler(int sig) {
     if (sig == SIGUSR1) {
@@ -252,14 +254,15 @@ int main(int argc, char *argv[]) {
                 printf("Koniec listy zadan\n");
                 break;
             }
-            sleepIfNeeded(buffer);
-            pid = fork();
-            if (pid == (pid_t)0) {
-                printf("%s", buffer);
-                doTask(buffer, outfile);
-                exit(0);
-            } else {
-                waitpid(pid, NULL, 0);
+            if (sleepIfNeeded(buffer) == 0) {
+                pid = fork();
+                if (pid == (pid_t)0) {
+                    printf("%s", buffer);
+                    doTask(buffer, outfile);
+                    exit(0);
+                } else {
+                    waitpid(pid, NULL, 0);
+                }
             }
         }
     }
