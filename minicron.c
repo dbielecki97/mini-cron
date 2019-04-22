@@ -2,13 +2,13 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
-#include <stdbool.h> /* false */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <stdbool.h>
 #include <syslog.h>
 #include <time.h>
 #include <unistd.h>
@@ -204,6 +204,8 @@ char* getPWD(){
 }
 
 int main(int argc, char *argv[]) {
+    assert (argc > 2 && argc <= 3);
+
     pid_t pid, sid, status;
 
     char *taskfile = getPWD();
@@ -213,8 +215,8 @@ int main(int argc, char *argv[]) {
     pipePath = (char *)calloc(sizeof(char), strlen(path)+1);
     pipePath[0] = '.';
     strcat(pipePath, path);
-    strcat(taskfile,argv[1]);
-    strcat(outfile,argv[2]);
+    strcat(taskfile, argv[1]);
+    strcat(outfile, argv[2]);
 
     signal(SIGUSR1, handler);
     signal(SIGUSR2, handler);
