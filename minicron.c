@@ -111,39 +111,50 @@ void sortTaskFile(char *taskfile) {
         fclose(stream);
     }
     FILE *main_file = fopen(taskfile, "r");
-    FILE *extra_file = fopen("extra.txt", "w");
+    int lines = 0, i = 0;
+    char ch;
+    while(!feof(main_file)){
+        ch = fgetc(main_file);
+        if(ch == '\n')
+        {
+            lines++;
+        }
+    }
+    fclose(main_file);
+    char **extra = (char**)calloc(sizeof(char*),lines);
+    for(int i=0;i<lines;i++){
+        extra[i] = (char*)calloc(sizeof(char), 128);
+    }
 
+    main_file = fopen(taskfile, "r");
     struct tm *ptm = getTime();
     int act_seconds =
         ptm->tm_sec + ptm->tm_min * 60 + ((ptm->tm_hour + CET) % 24) * 60 * 60;
     char *buffer = (char *)calloc(sizeof(char), 1024);
-    size_t buf_size = 1024;
+    size_t buf_size = 128;
     while (!feof(main_file) && !ferror(main_file) &&
            getline(&buffer, &buf_size, main_file) != EOF) {
         int task_seconds = getTaskSeconds(buffer);
         if (task_seconds > act_seconds) {
-            fprintf(extra_file, "%s", buffer);
-            fflush(extra_file);
+            strcpy(extra[i++],buffer);
         }
     }
-    fclose(extra_file);
     fclose(main_file);
     main_file = fopen(taskfile, "r");
-    extra_file = fopen("extra.txt", "a");
     while (!feof(main_file) && !ferror(main_file) &&
            getline(&buffer, &buf_size, main_file) != EOF) {
         int task_seconds = getTaskSeconds(buffer);
         if (task_seconds < act_seconds) {
-            fprintf(extra_file, "%s", buffer);
-            fflush(extra_file);
+            strcpy(extra[i++],buffer);
         }
     }
+    free(buffer);
     fclose(main_file);
-    remove(taskfile);
-    rename("extra.txt", taskfile);
-    fclose(extra_file);
-    close(STDIN_FILENO);
-    close(STDOUT_FILENO);
+    main_file = fopen(taskfile, "w");
+    for(int i=0;i<lines;i++){
+        fprintf(main_file, "%s", extra[i]);
+    }
+    fclose(main_file);
 }
 
 int sleepIfNeeded(char *buffer) {
@@ -154,7 +165,7 @@ int sleepIfNeeded(char *buffer) {
         ptm->tm_sec + ptm->tm_min * 60 + ((ptm->tm_hour + CET) % 24) * 60 * 60;
     if (act_seconds != task_seconds) {
         if (task_seconds - act_seconds < 0) {
-            // timeLeft = slee(24*60*60 - act_seconds + task_seconds);
+            // timeLeft = sleep(24*60*60 - act_seconds + task_seconds);
         }
         //else timeLeft = sleep(task_seconds - act_seconds);
         timeLeft = sleep(15);
@@ -278,7 +289,6 @@ int main(int argc, char *argv[]) {
             if (sleepIfNeeded(buffer) == 0) {
                 pid = fork();
                 if (pid == (pid_t)0) {
-                    printf("%s", buffer);
                     doTask(buffer, outfile);
                     exit(0);
                 } else {
