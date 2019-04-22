@@ -198,11 +198,40 @@ void sendRemainingTasks(char *taskfile){
     row = row_copy-1;
     closelog();
 }
+
+char* getPWD(){
+    pid_t pid;
+    int fds[2];
+    pipe(fds);
+    pid = fork();
+    if(pid == (pid_t)0){
+        close(fds[0]);
+        dup2(fds[1],STDOUT_FILENO);
+        execlp("pwd","pwd",(char *)0);
+    }
+    else {
+        close(fds[1]);
+        waitpid(pid,NULL,0);
+        char *buffer = (char *)calloc(sizeof(char), 256);
+        read(fds[0],buffer, 256);
+        close(fds[0]);
+        buffer[strlen(buffer)-1]='/';
+        return buffer;
+    }
+}
+
 int main(int argc, char *argv[]) {
     /* Our process ID and Session ID */
     pid_t pid, sid, status;
-    char *taskfile = argv[1];
-    char *outfile = argv[2];
+
+    char *taskfile = (char *)calloc(sizeof(char), 256);
+    char *outfile = (char *)calloc(sizeof(char), 256);
+    taskfile = getPWD();
+    outfile = getPWD();
+    strcat(taskfile,argv[1]);
+    printf("%s\n",taskfile);
+    strcat(outfile,argv[2]);
+    printf("%s\n",outfile);
 
     signal(SIGUSR1, handler);
     signal(SIGUSR2, handler);
@@ -229,7 +258,7 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
     /* Change the current working directory */
-    /*if ((chdir("/")) < 0) {
+    if ((chdir("/")) < 0) {
         //Log the failure
         exit(EXIT_FAILURE);
     }
@@ -238,7 +267,7 @@ int main(int argc, char *argv[]) {
     out = dup(1);
     close(STDIN_FILENO);
     close(STDOUT_FILENO);
-    close(STDERR_FILENO);
+    //close(STDERR_FILENO);
     /*-------------------koniec inicjalizacji
      * !!----------------------------------*/
 

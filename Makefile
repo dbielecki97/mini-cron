@@ -17,13 +17,13 @@ cleanall:
 	@rm -f *.o out* minicron pipe
 	@echo "Deleted *.o, minicron, pipe and out* files"
 sigusr1:
-	@kill -10 `ps -e | grep minicron |  egrep -o '^[0-9]{1,}'`
+	@kill -10 `ps -e | grep minicron |  egrep -o '^.[0-9]{1,}'`
 	@echo "SIGUSR1 was sent to deamon"
 sigusr2:
-	@kill -12 `ps -e | grep minicron |  egrep -o '^[0-9]{1,}'`
+	@kill -12 `ps -e | grep minicron |  egrep -o '^.[0-9]{1,}'`
 	@echo "SIGUSR2 was sent to deamon"
 sigint:
-	@kill -2 `ps -e | grep minicron |  egrep -o '^[0-9]{1,}'`
+	@kill -2 `ps -e | grep minicron |  egrep -o '^.[0-9]{1,}'`
 	@echo "SIGINT was sent to deamon"
 test_pipe1:
 	@echo "Testing pipe with 1 segment!"
