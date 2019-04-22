@@ -14,15 +14,17 @@
 #include <unistd.h>
 
 #define CET 2
+
+int row = 0, in, out, needsSorting = 1, needsSending = 0;
+char *pipePath;
+
 struct tm *getTime() {
     time_t seconds;
     time(&seconds);
     struct tm *ptm = gmtime(&seconds);
     return ptm;
 }
-//----------------------------------------------------------------zmienna
-// globalna xd
-int row = 0, in, out, needsSorting = 1, needsSending = 0;
+
 int getTaskSeconds(char *buffer) {
     int hour = (buffer[0] % 48) * 10 + (buffer[1] % 48);
     int minute = (buffer[3] % 48) * 10 + (buffer[4] % 48);
@@ -44,8 +46,7 @@ void doTask(char *buffline, char *outfile) {
         fclose(file);
         char mode = buffline[strlen(buffline) - 2];
         char *arg[] = {"pipe", command, outfile, &mode, NULL};
-        // printf("mincron: %s %s %c\n",command, outfile, mode);
-        execvp("./pipe", arg);
+        execvp(pipePath, arg);
     } else {
         waitpid(pid, &status, 0);
         exit(0);
@@ -53,19 +54,6 @@ void doTask(char *buffline, char *outfile) {
 }
 
 char *getNextTask(char *taskfile) {
-    /*
-&buffer is the address of the first character position where the input string
-will be stored. It’s not the base address of the buffer, but of the first
-character in the buffer. This pointer type (a pointer-pointer or the ** thing)
-causes massive confusion.
-
-&buf_size is the address of the variable that holds the size of the input
-buffer, another pointer.
-
-stream is the input file handle. So you could use getline() to read a line of
-text from a file, but when stdin is specified, standard input is read.
-    */
-    // printf("%p\n",(void *)stream);
     FILE *stream = fopen(taskfile, "r");
     if (stream == NULL)
         perror("Blad otwarcia pliku");
@@ -78,7 +66,6 @@ text from a file, but when stdin is specified, standard input is read.
         if (j++ >= row) {
             row = j;
             fclose(stream);
-            // printf("%s",buffer);
             return buffer;
         }
     }
@@ -91,10 +78,8 @@ void writeFromFile(FILE **stream, char *filename) {
         perror("Blad otwarcia pliku");
         return;
     }
-    // printf("writeFromFile--> %s\n", filename);
     char c = getc(file);
     while (c != EOF) {
-        //  printf("%c", c);
         fprintf(*stream, "%c", c);
         fflush(*stream);
         c = getc(file);
@@ -109,14 +94,14 @@ void sortTaskFile(char *taskfile) {
     int fds[2];
     pipe(fds);
     pid = fork();
-    if (pid == (pid_t)0) { // child
+    if (pid == (pid_t)0) {
         dup2(fds[0], STDIN_FILENO);
         int fd = open(taskfile, O_WRONLY);
         dup2(fd, STDOUT_FILENO);
         close(fds[0]);
         close(fds[1]);
         execlp("sort", "sort", (char *)0);
-    } else { // parent
+    } else {
         FILE *stream;
         close(fds[0]);
         stream = fdopen(fds[1], "w");
@@ -168,13 +153,11 @@ int sleepIfNeeded(char *buffer) {
     int act_seconds =
         ptm->tm_sec + ptm->tm_min * 60 + ((ptm->tm_hour + CET) % 24) * 60 * 60;
     if (act_seconds != task_seconds) {
-        // printf("godz:%d:%d:%d, odliczanie->%d\n",(ptm->tm_hour+CET)%24,
-        // ptm->tm_min, ptm->tm_sec, (task_seconds - act_seconds));
         if (task_seconds - act_seconds < 0) {
             // timeLeft = slee(24*60*60 - act_seconds + task_seconds);
         }
         //else timeLeft = sleep(task_seconds - act_seconds);
-        timeLeft = sleep(20);
+        timeLeft = sleep(15);
     }
     return timeLeft;
 }
@@ -189,7 +172,7 @@ void sendRemainingTasks(char *taskfile){
     setlogmask(LOG_UPTO(LOG_INFO));
     openlog("REMAINING TASKS", LOG_CONS | LOG_PID | LOG_NDELAY, LOG_LOCAL1);
     int row_copy = row;
-    row-=1;
+    row -= 1;
     char *buffer = getNextTask(taskfile);
     while(buffer != NULL){
         syslog(LOG_INFO, "%s", buffer);
@@ -221,60 +204,51 @@ char* getPWD(){
 }
 
 int main(int argc, char *argv[]) {
-    /* Our process ID and Session ID */
     pid_t pid, sid, status;
 
-    char *taskfile = (char *)calloc(sizeof(char), 256);
-    char *outfile = (char *)calloc(sizeof(char), 256);
-    taskfile = getPWD();
-    outfile = getPWD();
+    char *taskfile = getPWD();
+    char *outfile = getPWD();
+    char *path = getPWD();
+    strcat(path,"pipe");
+    pipePath = (char *)calloc(sizeof(char), strlen(path)+1);
+    pipePath[0] = '.';
+    strcat(pipePath, path);
     strcat(taskfile,argv[1]);
-    printf("%s\n",taskfile);
     strcat(outfile,argv[2]);
-    printf("%s\n",outfile);
 
     signal(SIGUSR1, handler);
     signal(SIGUSR2, handler);
-    //-------------inicjalizacja DEMONA-------------------------------
 
-    /* Fork off the parent process */
+
     pid = fork();
     if (pid < 0) {
         exit(EXIT_FAILURE);
     }
-    /* If we got a good PID, then
-       we can exit the parent process. */
+
     if (pid > 0) {
         exit(EXIT_SUCCESS);
     }
-    /* Change the file mode mask */
     umask(0);
-    /* Open any logs here */
 
-    /* Create a new SID for the child process */
     sid = setsid();
     if (sid < 0) {
-        /* Log the failure */
         exit(EXIT_FAILURE);
     }
-    /* Change the current working directory */
+
     if ((chdir("/")) < 0) {
-        //Log the failure
         exit(EXIT_FAILURE);
     }
-        /* Close out the standard file descriptors */
+
     in = dup(0);
     out = dup(1);
     close(STDIN_FILENO);
     close(STDOUT_FILENO);
-    //close(STDERR_FILENO);
-    /*-------------------koniec inicjalizacji
-     * !!----------------------------------*/
+    close(STDERR_FILENO);
 
-    /* Daemon-specific initialization goes here */
+
 
     char *buffer = NULL;
-    /* The Big Loop */
+
     pid = fork();
     if (pid == -1) {
         perror("fork");
