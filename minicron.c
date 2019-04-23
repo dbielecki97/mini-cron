@@ -155,6 +155,8 @@ void sortTaskFile(char *taskfile) {
         fprintf(main_file, "%s", extra[i]);
     }
     fclose(main_file);
+    close(STDIN_FILENO);
+    close(STDOUT_FILENO);
 }
 
 int sleepIfNeeded(char *buffer) {
